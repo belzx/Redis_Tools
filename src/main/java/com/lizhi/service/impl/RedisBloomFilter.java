@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * from https://blog.csdn.net/qq_18495465/article/details/78500472
- *
+ * 布隆过滤工具，有修改
  * @param <E>
  */
 public class RedisBloomFilter<E> implements IRedisBloomFilter<E> {

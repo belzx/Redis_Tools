@@ -1,5 +1,7 @@
 package com.lizhi.service;
 
+import com.lizhi.utils.PipelineTemplete;
+
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -104,16 +106,8 @@ public interface IRedisService {
     IRedisBloomFilter getBloomFilter();
 
     /**
-     * 分布式锁
-     * @param key
-     * @param expireTime 单位s
-     * @return
+     * 管道
      */
-    boolean lock(String key, long expireTime);
+    <T> T pipeline(PipelineTemplete<T> pipelineTemplete);
 
-    /**
-     * 解锁操作，最好放在finally中执行
-     * @param key
-     */
-    void unLock(String key);
 }

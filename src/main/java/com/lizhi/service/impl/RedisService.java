@@ -2,10 +2,13 @@ package com.lizhi.service.impl;
 
 import com.lizhi.service.IRedisBloomFilter;
 import com.lizhi.service.IRedisService;
+import com.lizhi.utils.PipelineTemplete;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.SessionCallback;
@@ -23,7 +26,6 @@ public class RedisService implements IRedisService {
 
     private static Logger log = LoggerFactory.getLogger(RedisService.class);
 
-    private static ThreadLocal<String> threadLocal = new ThreadLocal<>();
     /**
      * redisTemplate.opsForValue();//操作字符串
      * redisTemplate.opsForHash();//操作hash
@@ -273,31 +275,19 @@ public class RedisService implements IRedisService {
         });
     }
 
-    public boolean lock(String key, long expireTime) {
-        //uuid：用来保证集群下，解锁只能由上锁人执行
-        String uuid = UUID.randomUUID().toString();
-        threadLocal.set(uuid);
-        return setIfAbsent(key, uuid, expireTime, TimeUnit.SECONDS);
-    }
-
-    public void unLock(String key) {
-        String uuid = threadLocal.get();
-        if(uuid == null){
-            log.error("Failed to UnLock, uuid id null , key:[{}]",key);
-        }else {
-            try {
-               if(uuid.equals(get(key))){
-                   threadLocal.remove();//防止内存溢出
-                   //删除操作
-                   remove(key);
-               }else {
-                   log.error("Failed to UnLock, uuid id not equals, key:[{}]",key);
-               }
-            }catch (Exception e){
-                log.error("Failed to UnLock",e);
+    public <T> T pipeline(PipelineTemplete<T> pipelineTemplete) {
+        return (T) redisTemplate.execute(new RedisCallback<T>() {
+            @Override
+            public T doInRedis(RedisConnection connection) throws DataAccessException {
+                connection.openPipeline();
+                pipelineTemplete.pipelineExecute();
+                try {
+                    return pipelineTemplete.processResult(connection.closePipeline());
+                }catch (Exception e){
+                    log.error("Failed to pipeline",e);
+                    return null;
+                }
             }
-        }
+        });
     }
-
-
 }
