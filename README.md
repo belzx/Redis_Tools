@@ -1,14 +1,11 @@
 ## redis工具包
 ## 功能：redis常用方法、redis分布式锁
 ## 1. redis常用方法
-
-    参考IRedisService接口。写的不太好，在完善中
-    
+    参考IRedisService接口。
 ## 2. redis分布式锁
+
+接口：
 ```
-        @Autowired 
-        RedisDistributedLock reedisDistributedLock;
-    
         /**
          * 
          * @param key keyname
@@ -23,6 +20,81 @@
         @Override
          public void releaseLock(String key) ；
         
+```
+
+例子：
+```
+@Test
+    public void testRedisLock() {
+        try {
+            new Thread(() -> {
+                System.out.println("Thread1 try to get lock ...");
+                if (redisDistributedLock.lock("11111")) {
+                    System.out.println("Thread1 try success  get lock");
+                    try {
+                        System.out.println("Thread1 do somethins ...");
+                        try {
+                            Thread.sleep(3000);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                        System.out.println("Thread1 over");
+                    } finally {
+                        redisDistributedLock.releaseLock("11111");
+                    }
+                }
+            }).start();
+
+            Thread.sleep(1000);
+
+            new Thread(() -> {
+                System.out.println("Thread2 try to get lock ...");
+                if (redisDistributedLock.lock("11111", 4, 3000L)) {
+                    try {
+                        System.out.println("Thread2 do somethins ...");
+                        try {
+                            Thread.sleep(3000);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                        System.out.println("Thread2 over");
+                    } finally {
+                        redisDistributedLock.releaseLock("11111");
+                    }
+                } else {
+                    System.out.println("Thread2 Failed to lock");
+                }
+            }).start();
+
+            Thread.sleep(2222222);
+
+        } catch (Exception e) {
+            log.error("", e);
+        }
+    }
+```
+
+结果：
+
+```
+Thread1 try to get lock ...
+Thread1 try success  get lock
+Thread1 do somethins ...
+Thread2 try to get lock ...
+Thread1 over
+2019-03-03 22:47:18.658 [Thread-6] WARN  com.lizhi.utils.RetryTemplate - com.lizhi.service.impl.RedisDistributedLock$1retry:[1]times,cast [3001]ms
+Thread2 do somethins ...
+Thread2 over
+```
+
+AOP注解实现上锁：
+
+```
+    @RedisLock(value = "123")//value尽可能复杂一点，避免重复
+    public void tt() {
+        System.out.println("testttt2");
+    }
+    
 ```
 
 上锁的时候，可能会遇到如下几个问题
@@ -51,13 +123,12 @@
     
     线程T2获取锁，会从slave节点上去判断锁是否存在，由于Redis的master slave复制是异步的，所以此时线程T2可能成功获取到锁
     
-解决：建议lock锁后，再次确认lock是不是自己的 checkLock（key），比较耗性能。
+解决：lock锁后，再次确认lock是不是自己的 isLock（key），双重检查
 
 ## 3. 布隆过滤 
 
 参照 https://blog.csdn.net/qq_18495465/article/details/78500472
 
-修改了一点
 
 ```
         /**
@@ -71,17 +142,52 @@
         
 ```
 ### 4.pub/sub
-
+接口：
 ```
     public void sendMessage(String channel, String message) 
 ```
 
 ### 5.管道
-
+接口：
 ```
     <T> T pipeline(PipelineTemplete<T> pipelineTemplete) 
 ```
+例子：
+```
+  @Test
+    public void testPipeline() {
 
+        long a = System.currentTimeMillis();
+        redisService.pipeline(new PipelineTemplete() {
+            @Override
+            public void pipelineExecute() {
+                for (int i = 0; i < 100000; i++) {
+                   redisService.set("123222" + i,2);
+                }
+            }
+
+            @Override
+            public void resultProcess(List<Object> list) {
+                System.out.println(list);
+            }
+        });
+
+        long b = System.currentTimeMillis();
+        System.out.println("Pipeline cast:" + (b - a)+"ms");
+
+        for (int i = 0; i < 100000; i++) {
+            redisService.set("123222" + i, 2);
+        }
+
+        long c = System.currentTimeMillis();
+        System.out.println("no pipeline cast:" + (c - b)+"ms");
+    }
+```
+结果显而易见：
+```
+Pipeline cast:692ms
+no pipeline cast:6509ms
+```
 
 ### 思考： 
 #### 1. 如何实现日统计在线人数，周统计在线人数

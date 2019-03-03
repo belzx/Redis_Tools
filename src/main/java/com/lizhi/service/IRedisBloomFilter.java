@@ -3,6 +3,11 @@ package com.lizhi.service;
 import java.util.Collection;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * @author https://github.com/lizhixiong1994
+ * @Date 2019-02-28
+ * @param <E>
+ */
 public interface IRedisBloomFilter<E> {
 
     void setRedisService(IRedisService redisService);

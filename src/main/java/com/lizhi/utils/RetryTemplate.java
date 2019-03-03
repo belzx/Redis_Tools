@@ -3,6 +3,10 @@ package com.lizhi.utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * @author https://github.com/lizhixiong1994
+ * @Date 2019-02-28
+ */
 public class RetryTemplate {
 
     private static final int DEFAULT_RETRY_TIMES = 3;
@@ -46,7 +50,7 @@ public class RetryTemplate {
             start = System.currentTimeMillis();
             result = callBack.doWithRetry();
             if (callBack.isComplete(result)) {
-                callbackSucceeded(stop);
+                callbackSucceeded(result);
                 return result;
             } else {
                 stop = System.currentTimeMillis();
@@ -56,29 +60,28 @@ public class RetryTemplate {
                         try {
                             Thread.sleep(waitLeft);
                         } catch (InterruptedException e) {
-                            stop = System.currentTimeMillis();
-                            callBackFailed(stop);
+                            callBackFailedByInterrupted();
                             throw new RuntimeException("Retry failed interrupted while waiting", e);
                         }
                     }else {
-
+                        //
+                        LOGGER.info("Retry executing time is out [{}]ms",waitTime);
                     }
                 }
-                LOGGER.warn(callBack.getClass().getName() + "retry:[{}]times" + executeRetryTimes);
+                LOGGER.warn(callBack.getClass().getName() + "retry:[{}]times,cast [{}]ms", executeRetryTimes,System.currentTimeMillis() - start);
             }
         } while (executeRetryTimes < defaultRetryTimes);
-        callbackFailed(stop);
+        callbackFailed();
         return null;
     }
 
-    private void callBackFailed(long stop) {
-
+    public void callBackFailedByInterrupted() {
     }
 
-    private void callbackFailed(long stop) {
+    public <T> void callbackSucceeded(T result) {
     }
 
-    private void callbackSucceeded(long stop) {
+    public void callbackFailed() {
     }
 
 }

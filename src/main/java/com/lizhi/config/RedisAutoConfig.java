@@ -11,6 +11,10 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericToStringSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
+/**
+ * @author https://github.com/lizhixiong1994
+ * @Date 2019-02-28
+ */
 @Configuration
 @ComponentScan("com.lizhi")
 public class RedisAutoConfig {
