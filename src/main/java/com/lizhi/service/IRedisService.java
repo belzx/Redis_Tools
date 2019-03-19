@@ -232,4 +232,8 @@ public interface IRedisService {
      * @param pipelineTemplete
      */
     List<Object>  pipeline(PipelineTemplete pipelineTemplete);
+
+     boolean redisLock(final String key, String value, long expireTime, TimeUnit timeUnit);
+
+     boolean releaseLock(String key, String value);
 }

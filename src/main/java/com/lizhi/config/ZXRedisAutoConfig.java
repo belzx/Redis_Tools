@@ -17,7 +17,7 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
  */
 @Configuration
 @ComponentScan("com.lizhi")
-public class RedisAutoConfig {
+public class ZXRedisAutoConfig {
 
     @Bean
     public CacheManager cacheManager(RedisTemplate<?, ?> redisTemplate){

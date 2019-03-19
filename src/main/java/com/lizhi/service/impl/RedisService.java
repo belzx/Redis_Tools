@@ -13,12 +13,12 @@ import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.stereotype.Service;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisCluster;
+import redis.clients.jedis.JedisCommands;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 
@@ -27,6 +27,18 @@ public class RedisService implements IRedisService {
 
     private static Logger log = LoggerFactory.getLogger(RedisService.class);
 
+    public static final String UNLOCK_LUA;
+
+    static {
+        StringBuilder sb = new StringBuilder();
+        sb.append("if redis.call(\"get\",KEYS[1]) == ARGV[1] ");
+        sb.append("then ");
+        sb.append("    return redis.call(\"del\",KEYS[1]) ");
+        sb.append("else ");
+        sb.append("    return 0 ");
+        sb.append("end ");
+        UNLOCK_LUA = sb.toString();
+    }
 
     @Autowired
     private RedisTemplate redisTemplate;
@@ -38,7 +50,6 @@ public class RedisService implements IRedisService {
             remove(key);
         }
     }
-
 
     @Override
     public void removePattern(final String keys) {
@@ -78,7 +89,6 @@ public class RedisService implements IRedisService {
             return false;
         }
     }
-
 
     @Override
     public boolean set(final String key, final Object value, final Long expireTime) {
@@ -249,6 +259,46 @@ public class RedisService implements IRedisService {
         }
     }
 
+    @Override
+    public boolean redisLock(final String key,final String value, long expireTime, TimeUnit timeUnit) {
+        String result = (String) redisTemplate.execute(new RedisCallback<String>() {
+            public String doInRedis(RedisConnection connection) throws DataAccessException {
+                JedisCommands commands = (JedisCommands) connection.getNativeConnection();
+                return commands.set(key, value, "NX", "PX", timeUnit.toMillis(expireTime));
+            }
+        });
+        return result != null && result.length() != 0;
+    }
+
+    @Override
+    public boolean releaseLock(String key, String value) {
+        // 释放锁的时候，有可能因为持锁之后方法执行时间大于锁的有效期，此时有可能已经被另外一个线程持有锁，所以不能直接删除
+        try {
+            List<String> keys = new ArrayList<String>();
+            keys.add(key);
+            List<String> args = new ArrayList<String>();
+            args.add(value);
+
+            // 使用lua脚本删除redis中匹配value的key，可以避免由于方法执行时间过长而redis锁自动过期失效的时候误删其他线程的锁
+            // spring自带的执行脚本方法中，集群模式直接抛出不支持执行脚本的异常，所以只能拿到原redis的connection来执行脚本
+            Long result = (Long) redisTemplate.execute(new RedisCallback() {
+                public Long doInRedis(RedisConnection connection) throws DataAccessException {
+                    Object nativeConnection = connection.getNativeConnection();
+                    // 集群模式和单机模式虽然执行脚本的方法一样，但是没有共同的接口，所以只能分开执行
+                    if (nativeConnection instanceof JedisCluster) {  // 集群模式
+                        return (Long) ((JedisCluster) nativeConnection).eval(UNLOCK_LUA, keys, args);
+                    } else if (nativeConnection instanceof Jedis) {// 单机模式
+                        return (Long) ((Jedis) nativeConnection).eval(UNLOCK_LUA, keys, args);
+                    }
+                    return 0L;
+                }
+            });
+            return result != null && result > 0;
+        } catch (Exception e) {
+            log.error("release lock occured an exception", e);
+        }
+        return false;
+    }
 
     @Override
     public boolean setIfAbsent(String key, Object value, long expireTime, TimeUnit timeUnit) {
@@ -269,9 +319,9 @@ public class RedisService implements IRedisService {
 
     @Override
     public List<Object> pipeline(PipelineTemplete pipelineTemplete) {
-        return ( List<Object>) redisTemplate.execute(new RedisCallback< List<Object>>() {
+        return (List<Object>) redisTemplate.execute(new RedisCallback<List<Object>>() {
             @Override
-            public  List<Object> doInRedis(RedisConnection connection) throws DataAccessException {
+            public List<Object> doInRedis(RedisConnection connection) throws DataAccessException {
                 connection.openPipeline();
                 pipelineTemplete.pipelineExecute();
                 List<Object> objects = connection.closePipeline();

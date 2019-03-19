@@ -55,7 +55,7 @@ public class RedisDistributedLock extends AbstractDistributedLock {
     @Override
     public boolean lock(String key, long expire, int retryTimes, long sleepMillis) {
         final String uuid = UUID.randomUUID().toString();
-        Boolean execute = new RetryTemplate(retryTimes, sleepMillis){
+        Boolean execute = new RetryTemplate(retryTimes, sleepMillis) {
             @Override
             public <T> void callbackSucceeded(T result) {
                 super.callbackSucceeded(result);
@@ -64,7 +64,7 @@ public class RedisDistributedLock extends AbstractDistributedLock {
         }.execute(new RetryCallBack<Boolean>() {
             @Override
             public Boolean doWithRetry() {
-                return redisService.setIfAbsent(key, uuid, expire, TimeUnit.MILLISECONDS);
+                return redisService.redisLock(key, uuid, expire, TimeUnit.MILLISECONDS);
             }
 
             @Override
@@ -73,11 +73,7 @@ public class RedisDistributedLock extends AbstractDistributedLock {
             }
         });
 
-        if (execute == null || execute == false) {
-            return false;
-        } else {
-            return true;
-        }
+        return execute != null && execute != false;
     }
 
     @Override
@@ -98,14 +94,8 @@ public class RedisDistributedLock extends AbstractDistributedLock {
             if (uuid == null) {
                 LOGGER.error("Failed to releaseLock ,because UIID is null , key:[{}]", key);
                 return true;
-            } else if (uuid.equals(redisService.get(key))) {
-                threadLocal.remove();//防止内存溢出
-                redisService.remove(key); //删除操作
-                return true;
-            } else {
-                LOGGER.error("Failed to releaseLock, lock not belong to oneself, key:[{}]", key);
-                return false;
             }
+            return redisService.releaseLock(key, uuid);
         } catch (Exception e) {
             LOGGER.error("Failed to releaseLock", e);
             return false;

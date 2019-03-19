@@ -26,8 +26,8 @@ import java.util.Arrays;
  */
 @Aspect
 @Configuration
-@ConditionalOnClass(RedisDistributedLock.class)
-@AutoConfigureAfter(RedisAutoConfig.class)//AutoConfigureAfter 代表的含义就是自动注入在什么类加载前或者之后
+@ConditionalOnClass(RedisDistributedLock.class)//判断断当前classpath下是否存在指定类
+@AutoConfigureAfter(ZXRedisAutoConfig.class)//AutoConfigureAfter 代表的含义就是自动注入在什么类加载前或者之后
 public class DistributedLockAspectConfiguration {
 
     private final Logger logger = LoggerFactory.getLogger(DistributedLockAspectConfiguration.class);
